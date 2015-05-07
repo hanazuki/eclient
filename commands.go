@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/codegangsta/cli"
 	"os"
 	"strconv"
@@ -22,21 +23,22 @@ var commands = []cli.Command{
 func initClient(c *cli.Context) *EmacsClient {
 	client, err := NewEmacsClient(DefaultSocketPath("server"))
 	if err != nil {
-		os.Stderr.WriteString(err.Error())
-		os.Exit(1)
+		die(err)
 	}
 	return client
+}
+
+func die(err error) {
+	fmt.Fprintln(os.Stderr, err.Error())
+	os.Exit(1)
 }
 
 func cmdOpen(c *cli.Context) {
 	client := initClient(c)
 	defer client.Close()
 
-	cin := make(chan Command)
 	cout := make(chan Command)
-	go client.ProcessInput(cin)
 	go client.ProcessOutput(cout)
-
 	SendEnviron(cout)
 	SendCwd(cout)
 	SendTty(cout)
@@ -46,10 +48,11 @@ func cmdOpen(c *cli.Context) {
 	outputHandler := NewOutputHandler(os.Stdout, os.Stderr)
 	defer outputHandler.Flush()
 
+	cin := make(chan Command)
+	go client.ProcessInput(cin)
 	for cmd := range cin {
 		if handled, err := outputHandler.Handle(cmd); err != nil {
-			os.Stderr.WriteString(err.Error())
-			os.Exit(1)
+			die(err)
 		} else if handled {
 			continue
 		}
@@ -58,11 +61,10 @@ func cmdOpen(c *cli.Context) {
 		case "-emacs-pid":
 			_, err := strconv.ParseInt(cmd.Args[0], 10, 64)
 			if err != nil {
-				os.Stderr.WriteString(err.Error())
-				os.Exit(1)
+				die(err)
 			}
 		default:
-			print(cmd.Name)
+			// ignore
 		}
 	}
 }
@@ -71,11 +73,8 @@ func cmdEval(c *cli.Context) {
 	client := initClient(c)
 	defer client.Close()
 
-	cin := make(chan Command)
 	cout := make(chan Command)
-	go client.ProcessInput(cin)
 	go client.ProcessOutput(cout)
-
 	SendEnviron(cout)
 	SendCwd(cout)
 	for _, arg := range c.Args() {
@@ -86,22 +85,18 @@ func cmdEval(c *cli.Context) {
 	outputHandler := NewOutputHandler(os.Stdout, os.Stderr)
 	defer outputHandler.Flush()
 
+	cin := make(chan Command)
+	go client.ProcessInput(cin)
 	for cmd := range cin {
 		if handled, err := outputHandler.Handle(cmd); err != nil {
-			os.Stdout.WriteString(err.Error())
-			os.Exit(1)
+			die(err)
 		} else if handled {
 			continue
 		}
 
 		switch cmd.Name {
-		case "-emacs-pid":
-			_, err := strconv.ParseInt(cmd.Args[0], 10, 64)
-			if err != nil {
-				os.Exit(1)
-			}
 		default:
-			print(cmd.Name)
+			// ignore
 		}
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -174,7 +175,7 @@ func (h *OutputHandler) Handle(cmd Command) (bool, error) {
 	case "-print":
 		str := cmd.Args[0]
 		if err := h.Flush(); err != nil {
-			return true, nil
+			return true, err
 		}
 		if _, err := io.WriteString(h.wtout, str); err != nil {
 			return true, err
@@ -191,17 +192,9 @@ func (h *OutputHandler) Handle(cmd Command) (bool, error) {
 	case "-error":
 		str := cmd.Args[0]
 		if err := h.Flush(); err != nil {
-			return true, nil
-		}
-		if _, err := io.WriteString(h.wterr, str); err != nil {
 			return true, err
 		}
-		if len(str) > 0 && str[len(str)-1] != '\n' {
-			if _, err := io.WriteString(h.wterr, "\n"); err != nil {
-				return true, err
-			}
-		}
-		return true, nil
+		return true, errors.New(str)
 	default:
 		return false, nil
 	}
